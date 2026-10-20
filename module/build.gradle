@@ -1,0 +1,29 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'local.googlehomeru'
+    compileSdk 35
+    buildToolsVersion '36.1.0'
+
+    defaultConfig {
+        applicationId 'local.googlehomeru'
+        minSdk 22
+        targetSdk 22
+        versionCode 1
+        versionName '0.4-semantic-request-hook'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    compileOnly files('libs/api-82-source-built.jar')
+    implementation 'org.luckypray:dexkit:2.3.0'
+    testImplementation 'junit:junit:4.13.2'
+}

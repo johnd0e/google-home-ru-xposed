@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">Google Home language module</string>
+    <string name="xposed_description">Replaces the selected en-IN assistant language with the configured target language.</string>
+    <string name="settings_title">Assistant target language</string>
+    <string name="settings_description">Only English (India) en-IN is replaced. Other selected languages pass through unchanged.</string>
+    <string name="save_language">Save language</string>
+    <string name="invalid_language">Enter a language tag such as ru-RU or fr-FR.</string>
+    <string name="language_saved">Target language saved.</string>
+    <string name="language_save_failed">Could not save target language.</string>
+</resources>

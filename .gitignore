@@ -1,0 +1,39 @@
+# Gradle and Android build outputs
+.gradle/
+**/build/
+local.properties
+
+# Local developer state and signing material
+.android-user/
+.gradle-user/
+.local-home/
+*.jks
+*.keystore
+
+# Proprietary/user-supplied Android packages and generated analysis
+*.apk
+*.apks
+*.aab
+*.xapk
+/inputs/
+/analysis/
+/dist/
+
+# Downloaded SDK/JDK/Gradle/JADX bundles and build caches
+/tools/cache/
+/tools/java/
+/tools/gradle/
+/tools/android-sdk/
+/tools/android-build-tools/
+/tools/jadx/
+/tools/jadx-*/
+/tools/xposed-api82-build/
+/tools/XposedBridge-v82/
+/tools/build-xposed-api82.sh
+/tools/XposedBridge-v82/.git/
+
+# IDE and OS metadata
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
