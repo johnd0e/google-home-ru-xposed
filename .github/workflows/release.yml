@@ -1,0 +1,140 @@
+name: Untested Release
+
+on:
+  push:
+    tags:
+      - 'v*-untested'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing or new release tag (vMAJOR.MINOR.PATCH-untested)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Validate release tag
+        id: release_tag
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            tag="$INPUT_TAG"
+          else
+            tag="$REF_NAME"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-untested$ ]]; then
+            echo "Invalid release tag format" >&2
+            exit 1
+          fi
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Check signing secrets
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          [[ -n "$KEYSTORE_B64" ]] || { echo 'Missing repository Actions secret RELEASE_KEYSTORE_BASE64' >&2; exit 1; }
+          [[ -n "$KEYSTORE_PASSWORD" ]] || { echo 'Missing repository Actions secret RELEASE_KEYSTORE_PASSWORD' >&2; exit 1; }
+          [[ -n "$KEY_PASSWORD" ]] || { echo 'Missing repository Actions secret RELEASE_KEY_PASSWORD' >&2; exit 1; }
+          [[ -n "$KEY_ALIAS" ]] || { echo 'Missing repository Actions secret RELEASE_KEY_ALIAS' >&2; exit 1; }
+
+      - name: Check out release tag
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ steps.release_tag.outputs.tag }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          # `yes` may receive SIGPIPE once sdkmanager has accepted all prompts.
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
+          sdkmanager 'platforms;android-35' 'build-tools;36.1.0'
+
+      - name: Run unit tests and build debug APK
+        shell: bash
+        run: ./gradlew :module:testDebugUnitTest :module:assembleDebug --no-daemon
+
+      - name: Sign APK and create checksum
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          keystore="$RUNNER_TEMP/google-home-ru-release.jks"
+          unsigned_apk='module/build/outputs/apk/debug/module-debug.apk'
+          output_dir="$RUNNER_TEMP/release-assets"
+          apksigner="$ANDROID_HOME/build-tools/36.1.0/apksigner"
+          trap 'rm -f "$keystore"' EXIT
+
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$keystore"
+          chmod 600 "$keystore"
+          mkdir -p "$output_dir"
+          "$apksigner" sign \
+            --ks "$keystore" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass env:KEYSTORE_PASSWORD \
+            --key-pass env:KEY_PASSWORD \
+            --out "$output_dir/google-home-ru-configurable-debug.apk" \
+            "$unsigned_apk"
+          "$apksigner" verify --verbose "$output_dir/google-home-ru-configurable-debug.apk"
+          (cd "$output_dir" && sha256sum google-home-ru-configurable-debug.apk > SHA256SUMS.txt)
+
+      - name: Create or update UNTESTED prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release_tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          notes="$RUNNER_TEMP/release-notes.md"
+          cat > "$notes" <<'NOTES'
+          ## UNTESTED
+
+          This is a debug build. It has not been tested in Google Home on a device, with an Xposed-compatible runtime, or with a speaker.
+
+          GitHub Actions ran the project's unit tests and built the APK from the tagged source. CI success does not establish runtime compatibility.
+
+          The APK is signed with the project's stable signing key. Verify the downloaded APK with the accompanying SHA256SUMS.txt.
+          NOTES
+
+          title="$RELEASE_TAG (UNTESTED)"
+          if gh release view "$RELEASE_TAG" --json tagName >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --title "$title" --notes-file "$notes" --prerelease
+          else
+            gh release create "$RELEASE_TAG" --title "$title" --notes-file "$notes" --prerelease
+          fi
+          gh release upload "$RELEASE_TAG" \
+            "$RUNNER_TEMP/release-assets/google-home-ru-configurable-debug.apk" \
+            "$RUNNER_TEMP/release-assets/SHA256SUMS.txt" \
+            --clobber

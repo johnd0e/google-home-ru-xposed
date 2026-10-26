@@ -42,6 +42,10 @@ The module only targets the main `com.google.android.apps.chromecast.app` proces
 
 For each matching constructor call, the prototype logs the language code and displays a Toast with the before/after values. It does not log serialized request bodies, account identifiers, or device tokens. The Toasts are intentionally repeated for diagnostics and may be noisy. The module has no `INTERNET` permission.
 
+## Releases
+
+GitHub Actions builds and publishes tagged builds marked `UNTESTED`. See [release instructions](docs/releasing.md) for the current tag and future releases.
+
 The settings screen accepts a restricted language-tag syntax and stores a locale for `XSharedPreferences`. This checks syntax only; it does not establish that Google Home or a speaker supports the selected locale. Cross-process preference access uses `MODE_WORLD_READABLE` for the legacy Xposed setup and should be re-evaluated before supporting newer Android targets.
 
 ## Compatibility and validation
